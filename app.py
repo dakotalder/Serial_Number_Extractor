@@ -1,0 +1,79 @@
+import streamlit as st
+import fitz  # PyMuPDF
+import re
+import pandas as pd
+import tempfile
+from io import BytesIO
+
+# === SETTINGS ===
+known_brands = ['FRAZIL', 'CAFE TANGO', 'ENGY']
+brand_regex = re.compile(r'\b(?:' + '|'.join(re.escape(b) for b in known_brands) + r')\b', re.IGNORECASE)
+serial_pattern = r'ULT\w{7}'
+block_start_marker = "Shipped Serial Numbers/Asset Numbers"
+block_end_marker = "58000.0605"
+
+st.set_page_config(page_title="PDF Serial Extractor", layout="centered")
+st.title("🔍 PDF Serial Number Extractor")
+st.markdown("Upload one or more PDFs to extract serial numbers and associated brands.")
+
+uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
+
+if uploaded_files:
+    serial_numbers = []
+    brands = []
+
+    for uploaded_file in uploaded_files:
+        # Save uploaded file to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            tmp_path = tmp_file.name
+
+        # Extract full text from the PDF
+        with fitz.open(tmp_path) as doc:
+            full_text = "".join(page.get_text() for page in doc)
+
+        # Find block start and end positions
+        start_positions = [m.start() for m in re.finditer(re.escape(block_start_marker), full_text)]
+        end_positions = [m.start() for m in re.finditer(re.escape(block_end_marker), full_text)]
+        used_end_indices = set()
+
+        for start_idx in start_positions:
+            block_end = None
+            for end_idx in end_positions:
+                if end_idx > start_idx and end_idx not in used_end_indices:
+                    block_end = end_idx
+                    used_end_indices.add(end_idx)
+                    break
+
+            if block_end is None:
+                st.warning(f"No end marker found for block starting at index {start_idx}. Skipping.")
+                continue
+
+            block_text = full_text[start_idx:block_end]
+            preceding_text = full_text[max(0, start_idx - 50):start_idx]
+            brand_match = brand_regex.search(preceding_text)
+            brand = brand_match.group(0) if brand_match else "Unknown"
+
+            serials = re.findall(serial_pattern, block_text)
+            for serial in serials:
+                serial_numbers.append(serial)
+                brands.append(brand)
+
+    # Create DataFrame
+    df = pd.DataFrame({
+        'Serial Number': serial_numbers,
+        'Brand': brands
+    })
+
+    st.success(f"✅ Extracted {len(df)} serial numbers from {len(set(brands))} brands.")
+    st.dataframe(df)
+
+    # Excel download
+    output = BytesIO()
+    df.to_excel(output, index=False, engine='openpyxl')
+    st.download_button(
+        label="📥 Download Excel File",
+        data=output.getvalue(),
+        file_name="extracted_serials.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
