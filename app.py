@@ -30,14 +30,9 @@ brand_map = {
 # === STREAMLIT UI ===
 st.set_page_config(page_title="PDF Serial Extractor", layout="centered")
 image = Image.open("1Frazil_Logo.png")
-st.markdown(
-    """
-    <div style="text-align: center;">
-        <img src="1Frazil_Logo.png" width="300">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+st.image(image, width=300)
+st.markdown("</div>", unsafe_allow_html=True)
 st.title("🔍 PDF Serial Number Extractor")
 st.markdown("Upload one or more PDFs to extract serial numbers and associated brands.")
 
