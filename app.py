@@ -29,9 +29,9 @@ brand_map = {
 
 # === STREAMLIT UI ===
 st.set_page_config(page_title="PDF Serial Extractor", layout="centered")
-st.title("🔍 PDF Serial Number Extractor")
 image = Image.open("1Frazil_Logo.png")
-st.image(image, width=300)  # Adjust width as needed
+st.image(image, width=300, layout="centered")  # Adjust width as needed
+st.title("🔍 PDF Serial Number Extractor")
 st.markdown("Upload one or more PDFs to extract serial numbers and associated brands.")
 
 uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
