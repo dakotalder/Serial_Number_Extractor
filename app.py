@@ -31,14 +31,18 @@ st.image(image, width=300)
 st.markdown("## 🔍 PDF Serial Number Extractor")
 st.markdown("Upload one or more PDFs to extract serial numbers and associated brands.")
 
-# === PDF Upload + Processing ===
+# === PDF Upload ===
 uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
 
+# === Brand and Serial Config ===
 known_brands = ['FRAZIL', 'CAFE TANGO', 'ENGY', 'REFURB']
 brand_regex = re.compile(r'\b(?:' + '|'.join(re.escape(b) for b in known_brands) + r')\b', re.IGNORECASE)
 serial_pattern = r'ULT\w{7}'
-block_start_marker = "Shipped Serial Numbers/Asset Numbers"
 block_end_marker = "58000.0605"
+start_block_pattern = re.compile(r"ULTRA\s*NX,\s*BA\s*120V", re.IGNORECASE)
+
+
+# Optional brand mapping if needed
 brand_map = {
     "FRAZIL": "FRAZIL",
     "CAFE TANGO": "CAFÉ TANGO",
@@ -58,7 +62,8 @@ if uploaded_files:
         with fitz.open(tmp_path) as doc:
             full_text = "".join(page.get_text() for page in doc)
 
-        start_positions = [m.start() for m in re.finditer(re.escape(block_start_marker), full_text)]
+        # Find start and end block positions
+        start_positions = [m.start() for m in start_block_pattern.finditer(full_text)]
         end_positions = [m.start() for m in re.finditer(re.escape(block_end_marker), full_text)]
         used_end_indices = set()
 
@@ -75,16 +80,19 @@ if uploaded_files:
                 continue
 
             block_text = full_text[start_idx:block_end]
-            preceding_text = full_text[max(0, start_idx - 50):start_idx]
-            brand_match = brand_regex.search(preceding_text)
+
+            # 🔄 Look for brand inside the block
+            brand_match = brand_regex.search(block_text)
             raw_brand = brand_match.group(0).upper() if brand_match else "Unknown"
             brand = brand_map.get(raw_brand, "Unknown")
 
+            # 🔎 Find serial numbers in the block
             serials = re.findall(serial_pattern, block_text)
             for serial in serials:
                 serial_numbers.append(serial)
                 brands.append(brand)
 
+    # Create and show DataFrame
     df = pd.DataFrame({'Serial Number': serial_numbers, 'Brand': brands})
     st.success(f"✅ Extracted {len(df)} serial numbers from {len(set(brands))} brands.")
     st.dataframe(df)
@@ -92,9 +100,10 @@ if uploaded_files:
     # Download as Excel
     output = BytesIO()
     df.to_excel(output, index=False, engine='openpyxl')
+    output.seek(0)
     st.download_button(
         label="📥 Download Excel File",
-        data=output.getvalue(),
+        data=output,
         file_name="extracted_serials.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
